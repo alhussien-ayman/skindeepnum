@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Compare Numerical Methods</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #6668ea 0%, #4ba28e 100%);
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100">
+    <div class="min-h-screen p-4 md:p-8 text-gray-800">
+        <div class="max-w-5xl mx-auto bg-white/90 backdrop-blur-md shadow-2xl rounded-3xl p-6 md:p-10">
+
+            <header class="text-center mb-8">
+                <h1
+                    class="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600 pb-2">
+                    🔍 PDE Numerical Method Comparison
+                </h1>
+                <p class="text-lg text-gray-600">Compare Relative Error Between Two Methods</p>
+            </header>
+
+            {% if error %}
+            <div class="bg-red-100 text-red-700 px-4 py-3 rounded mb-6 shadow">
+                <strong>Error:</strong> {{ error }}
+            </div>
+            {% endif %}
+
+            <section class="controls bg-gray-50 p-6 rounded-xl shadow-md mb-10">
+                <form method="POST">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <!-- Method selectors -->
+                        <div>
+                            <label for="method1" class="block mb-1 text-sm font-medium text-gray-700">Select First
+                                Method:</label>
+                            <select name="method1" id="method1" required
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                {% for method in sim_functions %}
+                                <option value="{{ method }}" {% if selected_method1==method %}selected{% endif %}>
+                                    {{ method_labels[method] }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="method2" class="block mb-1 text-sm font-medium text-gray-700">Select Second
+                                Method:</label>
+                            <select name="method2" id="method2" required
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                {% for method in sim_functions %}
+                                <option value="{{ method }}" {% if selected_method2==method %}selected{% endif %}>
+                                    {{ method_labels[method] }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+                        {% for config in parameter_configs %}
+                        <div class="flex flex-col">
+                            <label for="{{ config.id }}" class="mb-1 text-sm font-medium text-gray-700">{{ config.label
+                                }}</label>
+                            <input type="{{ config.type if config.type == 'text' else 'number' }}" id="{{ config.id }}"
+                                name="{{ config.id }}" value="{{ params.get(config.id, config.defaultValue) }}"
+                                step="{{ config.step }}" min="{{ config.min }}" {% if 'max' in config
+                                %}max="{{ config.max }}" {% endif %}
+                                class="px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-colors {% if errors.get(config.id) %}border-red-500 focus:ring-red-500{% else %}border-gray-300 focus:ring-indigo-500{% endif %}"
+                                required>
+                            {% if errors.get(config.id) %}
+                            <p class="mt-1 text-xs text-red-600">{{ errors[config.id] }}</p>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="flex justify-center mt-6">
+                        <button type="submit"
+                            class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-300">
+                            Compare Methods
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            {% if 'relative_error' in plots %}
+            <section class="bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="text-xl font-semibold mb-4 text-gray-700 text-center">📈 Relative Error Plot</h3>
+                <div id="relative_error_plot" class="w-full max-w-4xl mx-auto"></div>
+                <script>
+                    var plot = {{ plots['relative_error'] | safe }};
+                    Plotly.newPlot('relative_error_plot', plot.data, plot.layout, { responsive: true });
+                </script>
+
+                <!-- Show Time Labels -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8 text-sm text-gray-700">
+                    <div>
+                        <h4 class="font-semibold text-indigo-700 mb-2">Time Labels of Method 1:</h4>
+                        <ul class="list-disc list-inside bg-gray-100 p-3 rounded-lg shadow-sm">
+                            {% for t in time1 %}
+                            <li>{{ t }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-purple-700 mb-2">Time Labels of Method 2:</h4>
+                        <ul class="list-disc list-inside bg-gray-100 p-3 rounded-lg shadow-sm">
+                            {% for t in time2 %}
+                            <li>{{ t }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </section>
+            {% endif %}
+
+        </div>
+    </div>
+</body>
+
+</html>

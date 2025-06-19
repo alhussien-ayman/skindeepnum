@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wound Healing PDE Solver (Python/Flask)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #6668ea 0%, #4ba28e 100%);
+    }
+  </style>
+</head>
+
+<body class="bg-gray-100">
+  <div class="min-h-screen p-4 md:p-8 text-gray-800">
+    <div class="max-w-7xl mx-auto bg-white/90 backdrop-blur-md shadow-2xl rounded-3xl p-6 md:p-10">
+      <header class="text-center mb-8">
+        <h1
+          class="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600 pb-2">
+          Epidermal Wound Healing PDE Solver
+        </h1>
+        <p class="text-lg text-gray-600">Comparing Numerical Methods for PDE Simulation</p>
+      </header>
+
+      <section class="controls bg-gray-50 p-6 rounded-xl shadow-md mb-8">
+        <form method="POST" action="/">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+            {% for config in parameter_configs %}
+            <div class="flex flex-col">
+              <label for="{{ config.id }}" class="mb-1 text-sm font-medium text-gray-700">{{ config.label }}</label>
+              <input type="{{ config.type if config.type == 'text' else 'number' }}" id="{{ config.id }}"
+                name="{{ config.id }}" value="{{ params.get(config.id, config.defaultValue) }}" step="{{ config.step }}"
+                min="{{ config.min }}" {% if 'max' in config %}max="{{ config.max }}" {% endif %}
+                class="px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-colors {% if errors.get(config.id) %}border-red-500 focus:ring-red-500{% else %}border-gray-300 focus:ring-indigo-500{% endif %}"
+                required>
+              {% if errors.get(config.id) %}
+              <p class="mt-1 text-xs text-red-600">{{ errors[config.id] }}</p>
+              {% endif %}
+            </div>
+            {% endfor %}
+
+            <div class="flex flex-col">
+              <label for="displayMethod" class="mb-1 text-sm font-medium text-gray-700">Display Plots</label>
+              <select id="displayMethod" name="displayMethod"
+                class="px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                {% for key, label in method_labels.items() %}
+                <option value="{{ key }}" {% if display_method==key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+                <option value="all" {% if display_method=='all' %}selected{% endif %}>All Methods</option>
+              </select>
+            </div>
+
+            <button type="submit"
+              class="block mx-auto col-span-1 md:col-span-2 lg:col-span-3 mt-4 h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-300">
+              Run Simulation & Update Plots
+            </button>
+
+            <a href="/compare"
+              class="block mx-auto col-span-1 md:col-span-2 lg:col-span-3 mt-4 h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-300">
+              Compare Two Methods
+            </a>
+          </div>
+        </form>
+      </section>
+
+      {% if request.method == 'POST' and not errors %}
+      <section class="plots-container grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {% for key, plot_json in plots.items() %}
+        {% if (display_method == 'all' or key == display_method or (key == 'comparison' and display_method == 'all'))
+        and key != 'relative_error' and key != 'error_over_time' %}
+        {% if plot_json %}
+        <div class="bg-white p-4 rounded-xl shadow-lg {% if key == 'comparison' %}md:col-span-2{% endif %}">
+          <div id="plot-{{ key }}"></div>
+          <script>
+            const plotData{{ loop.index }} = JSON.parse({{ plot_json | tojson | safe }});
+            Plotly.newPlot("plot-{{ key }}", plotData{{ loop.index }}.data, plotData{{ loop.index }}.layout, {
+              responsive: true
+            });
+          </script>
+        </div>
+        {% else %}
+        <div
+          class="bg-white p-4 rounded-xl shadow-lg h-full flex flex-col items-center justify-center min-h-[300px] text-center">
+          <h3 class="text-lg font-semibold mb-2 text-gray-700">{{ method_labels.get(key, key) }}</h3>
+          <p class="text-orange-600">Simulation failed or produced no data.</p>
+          <p class="text-xs text-gray-500 mt-1">Check parameters or method stability.</p>
+        </div>
+        {% endif %}
+        {% endif %}
+        {% endfor %}
+      </section>
+
+      {% if plots.get('relative_error') and display_method == 'all' %}
+      <div class="bg-white p-4 rounded-xl shadow-lg md:col-span-2 mb-8">
+        <h3 class="text-lg font-semibold mb-4 text-gray-700 text-center">📊 Average Relative Error</h3>
+        <div id="plot-relative-error"></div>
+        <script>
+          const errorBar = JSON.parse({{ plots['relative_error'] | tojson | safe }});
+          Plotly.newPlot("plot-relative-error", errorBar.data, errorBar.layout, { responsive: true });
+        </script>
+      </div>
+      {% endif %}
+
+      {% if plots.get('error_over_time') %}
+      <section class="bg-white p-6 rounded-xl shadow-lg">
+        <h3 class="text-xl font-semibold mb-4 text-gray-700 text-center">📈 Relative Error Over Time</h3>
+        <div id="relative_error_plot_index" class="w-full max-w-4xl mx-auto"></div>
+        <script>
+          var plot = {{ plots['error_over_time'] | safe }};
+          Plotly.newPlot('relative_error_plot_index', plot.data, plot.layout, { responsive: true });
+        </script>
+      </section>
+      {% endif %}
+
+      {% endif %}
+
+    </div>
+  </div>
+  {% if method_stats %}
+  <section class="bg-white p-4 mt-10 rounded-xl shadow-lg">
+    <h3 class="text-xl font-semibold mb-4 text-gray-700 text-center">⏱️ Method Performance Summary</h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border border-gray-300 rounded-lg shadow-sm">
+        <thead class="bg-gray-100">
+          <tr>
+            <th class="px-4 py-2 border-b">Method</th>
+            <th class="px-4 py-2 border-b">Execution Time (s)</th>
+            <th class="px-4 py-2 border-b">Max Relative Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for method, stats in method_stats.items() %}
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-2 border-b">{{ method_labels[method] }}</td>
+            <td class="px-4 py-2 border-b">{{ '%.6f' | format(stats.time) }}</td>
+            <td class="px-4 py-2 border-b">{{ '%.2e' | format(stats.max_error) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if performance_results_text %}
+    <div class="mt-8 text-center">
+      <h2 class="text-xl font-bold mb-4 text-gray-700">📝 Textual Performance Summary</h2>
+      <pre
+        class="bg-gray-100 p-6 rounded-lg text-sm whitespace-pre-wrap text-left inline-block max-w-4xl mx-auto shadow-md">
+{{ performance_results_text }}
+    </pre>
+    </div>
+    {% endif %}
+
+
+  </section>
+  {% endif %}
+
+</body>
+
+</html>
